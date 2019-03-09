@@ -48,7 +48,7 @@ type client struct {
 }
 
 func (c *client) Run(sentence ...string) (*routeros.Reply, error) {
-	log.Printf(">>> %s", strings.Join(sentence, " "))
+	log.Printf("ROS> %s", strings.Join(sentence, " "))
 	r, err := c.Client.Run(sentence...)
 	return r, err
 }
@@ -267,27 +267,24 @@ func run() error {
 	}
 	url := getAccountURL(*accountURLFile)
 	account, err := getOrCreateAccount(ctx, client, url)
+	if err != nil {
+		return err
+	}
 	if url == "" {
 		if err := writeAccountURL(*accountURLFile, account.URI); err != nil {
 			return err
 		}
 	}
-	if err != nil {
-		return err
-	}
 	auth, err := client.Authorize(ctx, *hostname)
 	if err != nil {
 		return err
-	}
-	log.Printf("%+v", auth)
-	for _, x := range auth.Challenges {
-		log.Printf("%+v", x)
 	}
 	if auth.Status != acme.StatusValid {
 		var chal *acme.Challenge
 		for _, c := range auth.Challenges {
 			if c.Type == "http-01" {
 				chal = c
+				break
 			}
 		}
 		if chal == nil {
@@ -315,19 +312,16 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		log.Printf("Start serving at port %s:%d%s", ip, port, path)
+		log.Printf("Start serving challenge at http://%s:%d%s", ip, port, path)
 
 		if err := c.redirectHTTPTraffic(ip, strconv.Itoa(port)); err != nil {
 			return err
 		}
 		defer c.revertTrafficRedirection()
-		log.Printf("now we just wait for someone to hit %s", chal.URI)
-		_, err = client.Accept(ctx, chal)
-		if err != nil {
+		if _, err = client.Accept(ctx, chal); err != nil {
 			return err
 		}
-		_, err = client.WaitAuthorization(ctx, chal.URI)
-		if err != nil {
+		if _, err = client.WaitAuthorization(ctx, chal.URI); err != nil {
 			return err
 		}
 
