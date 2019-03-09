@@ -1,6 +1,8 @@
 # ros-cert
 A tool to get Let's Encrypt certificate on Mikrotik RouterBoard devices.
 
+__NOTE__: this is a work-in-progress. Use at your own risk.
+
 ## Do you really need this?
 
 Think before you use this tool. Most likely the webfig UI of your
