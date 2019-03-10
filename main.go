@@ -85,10 +85,7 @@ func (c *client) CertValidUntil(hostname string) (time.Time, error) {
 	if len(r.Re) > 1 {
 		return time.Time{}, fmt.Errorf("found multiple certificates for %s, please consider remove one of them before continuing", hostname)
 	}
-	ia := r.Re[0].Map["invalid-after"]
-	// Unfortunatly Golang doesn't support date string like 'jan/02/2016' (note
-	// the first letter in lower case.).
-	return time.ParseInLocation("Jan/02/2006 15:04:05", strings.ToUpper(ia[:1])+ia[1:], tz)
+	return time.ParseInLocation("Jan/02/2006 15:04:05", r.Re[0].Map["invalid-after"], tz)
 }
 
 func (c *client) HTTPPort() (int, error) {
