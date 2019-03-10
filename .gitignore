@@ -10,3 +10,13 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# Default file name for account related files, and ros certificates.
+account.key
+account.cert
+account.txt
+ros.key
+ros.cert
+
+# Binary name for this project.
+ros-cert
