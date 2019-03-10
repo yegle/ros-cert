@@ -36,7 +36,7 @@ var (
 	rosKeyFile     = flag.String("ros_key_file", "ros.key", "The key file for ROS")
 	rosCertFile    = flag.String("ros_cert_file", "ros.cert", "The cert file for ROS")
 	staging        = flag.Bool("staging", true, "Whether to use the staging environment of Lets Encrypt")
-	force          = flag.Bool("force", false, "Whether to get a new certificate regardless of the current configure certificate's expiration date. The tool will prevent you from getting a new certificate if the current expiration is >30days in the future.")
+	forceRenew     = flag.Bool("force_renew", false, "Whether to get a new certificate regardless of the current configure certificate's expiration date. The tool will prevent you from getting a new certificate if the current expiration is >30days in the future.")
 )
 
 const (
@@ -261,8 +261,8 @@ func run() error {
 	defer c.Close()
 	if t, err := c.CertValidUntil(*hostname); err != nil {
 		return err
-	} else if t.Sub(time.Now()) > duration30days && !*force {
-		return fmt.Errorf("existing certificate exires at %s (>30 days in the future). Add -force to bypass this check", t.Format(time.RFC3339))
+	} else if t.Sub(time.Now()) > duration30days && !*forceRenew {
+		return fmt.Errorf("existing certificate exires at %s (>30 days in the future). Add -force_renew to bypass this check", t.Format(time.RFC3339))
 	}
 	c.revertTrafficRedirection()
 
