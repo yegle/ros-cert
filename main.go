@@ -36,11 +36,14 @@ var (
 	rosKeyFile     = flag.String("ros_key_file", "ros.key", "The key file for ROS")
 	rosCertFile    = flag.String("ros_cert_file", "ros.cert", "The cert file for ROS")
 	staging        = flag.Bool("staging", true, "Whether to use the staging environment of Lets Encrypt")
+	force          = flag.Bool("force", false, "Whether to get a new certificate regardless of the current configure certificate's expiration date. The tool will prevent you from getting a new certificate if the current expiration is >30days in the future.")
 )
 
 const (
 	keyType  = "RSA PRIVATE KEY"
 	certType = "CERTIFICATE"
+
+	duration30days = time.Duration(30 * 24 * 60 * 60 * 1e9)
 )
 
 type client struct {
@@ -50,25 +53,42 @@ type client struct {
 func (c *client) Run(sentence ...string) (*routeros.Reply, error) {
 	log.Printf("ROS> %s", strings.Join(sentence, " "))
 	r, err := c.Client.Run(sentence...)
-	return r, err
+	if err != nil {
+		return nil, err
+	} else if len(r.Re) == 0 {
+		return nil, errors.New("empty response from ROS")
+	}
+	return r, nil
 }
 
+func (c *client) Timezone() (*time.Location, error) {
+	r, err := c.Run("/system/clock/print")
+	if err != nil {
+		return nil, err
+	}
+	return time.LoadLocation(r.Re[0].Map["time-zone-name"])
+}
+
+// CertValidUntil returns the time when the certificate of the given hostname
+// expires.
+// If there's no certificate, it will NOT return error and instead return a
+// zero time.Time value.
 func (c *client) CertValidUntil(hostname string) (time.Time, error) {
+	tz, err := c.Timezone()
+	if err != nil {
+		return time.Time{}, err
+	}
 	r, err := c.Run("/certificate/print", "?common-name="+hostname)
 	if err != nil {
-		return time.Now(), err
+		return time.Time{}, err
 	}
-	if len(r.Re) == 0 {
-		return time.Now(), fmt.Errorf("no certificate for %s", hostname)
-	} else if len(r.Re) > 1 {
-		return time.Now(), fmt.Errorf("found multiple certificates for %s, please consider remove one of them before continuing", hostname)
+	if len(r.Re) > 1 {
+		return time.Time{}, fmt.Errorf("found multiple certificates for %s, please consider remove one of them before continuing", hostname)
 	}
 	ia := r.Re[0].Map["invalid-after"]
-	t, err := time.Parse(ia, "jan/02/2006 15:04:05")
-	if err != nil {
-		return t, fmt.Errorf("parse string to time failed: %v", err)
-	}
-	return t, nil
+	// Unfortunatly Golang doesn't support date string like 'jan/02/2016' (note
+	// the first letter in lower case.).
+	return time.ParseInLocation("Jan/02/2006 15:04:05", strings.ToUpper(ia[:1])+ia[1:], tz)
 }
 
 func (c *client) HTTPPort() (int, error) {
@@ -242,6 +262,11 @@ func run() error {
 		return err
 	}
 	defer c.Close()
+	if t, err := c.CertValidUntil(*hostname); err != nil {
+		return err
+	} else if t.Sub(time.Now()) > duration30days && !*force {
+		return fmt.Errorf("existing certificate exires at %s (>30 days in the future). Add -force to bypass this check", t.Format(time.RFC3339))
+	}
 	c.revertTrafficRedirection()
 
 	op, err := c.HTTPPort()
