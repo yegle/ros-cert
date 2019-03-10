@@ -346,40 +346,42 @@ func run() error {
 		if _, err = client.WaitAuthorization(ctx, chal.URI); err != nil {
 			return err
 		}
+	}
+	// Authorized, proceed to get certificate.
+	certKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	writeKey(certKey, *rosKeyFile)
 
-		certKey, err := rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			return err
-		}
-		writeKey(certKey, *rosKeyFile)
-
-		csr := &x509.CertificateRequest{
+	csrbs, err := x509.CreateCertificateRequest(
+		rand.Reader,
+		&x509.CertificateRequest{
 			Subject: pkix.Name{CommonName: *hostname},
-		}
+		},
+		certKey)
+	if err != nil {
+		return err
+	}
 
-		csrbs, err := x509.CreateCertificateRequest(rand.Reader, csr, certKey)
-		if err != nil {
-			return err
+	// Create a bundled certificate.
+	ders, certURL, err := client.CreateCert(ctx, csrbs, 90*24*time.Hour, true)
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(*rosCertFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		log.Printf("failed to create certificate file. Download the certificate from %s", certURL)
+		return err
+	}
+	defer out.Close()
+	for _, bs := range ders {
+		b := &pem.Block{
+			Type:  certType,
+			Bytes: bs,
 		}
-
-		ders, url, err := client.CreateCert(ctx, csrbs, 90*24*time.Hour, true)
-		if err != nil {
+		if err := pem.Encode(out, b); err != nil {
 			return err
-		}
-		log.Printf("Got certificate with URL: %s", url)
-		out, err := os.OpenFile(*rosCertFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
-		defer out.Close()
-		for _, bs := range ders {
-			b := &pem.Block{
-				Type:  certType,
-				Bytes: bs,
-			}
-			if err := pem.Encode(out, b); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
