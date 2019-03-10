@@ -13,7 +13,6 @@
 
 # Default file name for account related files, and ros certificates.
 account.key
-account.cert
 account.txt
 ros.key
 ros.cert
