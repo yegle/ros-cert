@@ -135,7 +135,7 @@ func getOrCreateAccountKey(keyfile string) (crypto.Signer, error) {
 		} else if b.Type != keyType {
 			return nil, fmt.Errorf("expect %q contains PEM type %q, got %q", keyfile, keyType, b.Type)
 		}
-		return x509.ParseECPrivateKey(b.Bytes)
+		return x509.ParsePKCS1PrivateKey(b.Bytes)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
